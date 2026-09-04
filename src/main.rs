@@ -305,7 +305,14 @@ fn prepare_apptainer_image(image: &str) -> Result<PathBuf, String> {
         "datahub-r-{VERSION}-{architecture}-{key}.partial.{}.sif",
         std::process::id()
     ));
+    if std::io::stderr().is_terminal() {
+        eprintln!(
+            "datahub-r: downloading and converting the image with Apptainer; the first pull may take several minutes"
+        );
+    }
+
     let arguments = vec![
+        OsString::from("--silent"),
         OsString::from("pull"),
         partial.as_os_str().to_owned(),
         OsString::from(&reference),

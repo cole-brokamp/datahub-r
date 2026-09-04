@@ -321,6 +321,7 @@ The cache has separate final-image, Apptainer cache, temporary-conversion, parti
 The image reference and architecture are part of the cached filename identity.
 A per-reference lock serializes concurrent first runs, and the winning pull atomically moves its completed SIF into place.
 Credentials and project data are never stored in the image cache.
+On an interactive cache miss, `datahub-r` prints one status line while Apptainer runs in silent mode; conversion errors are still reported.
 
 OCI runtimes use their own native image stores instead of this SIF cache.
 Use `datahub-r pull` to prepare the configured image without starting R.

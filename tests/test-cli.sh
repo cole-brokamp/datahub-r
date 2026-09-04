@@ -39,9 +39,9 @@ FAKE_CONTAINER
 cat > "$fake_bin/apptainer" <<'FAKE_APPTAINER'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "${1:-}" == "pull" ]]; then
+if [[ "${1:-}" == "--silent" && "${2:-}" == "pull" ]]; then
   printf 'apptainer-pull\n' >> "$DATAHUB_TEST_PULL_LOG"
-  : > "$2"
+  : > "$3"
   exit 0
 fi
 printf '%s\n' "$@" > "$DATAHUB_TEST_ARGS_LOG"
