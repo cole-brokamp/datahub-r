@@ -2,7 +2,7 @@
 
 set -eu
 
-repository="cchmc/datahub-r"
+repository="cole-brokamp/datahub-r"
 install_dir="${DATAHUB_R_INSTALL_DIR:-$HOME/.local/bin}"
 requested_version=""
 

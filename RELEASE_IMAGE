@@ -1,1 +1,1 @@
-docker://ghcr.io/cchmc/datahub-r@sha256:REPLACE_AT_RELEASE
+docker://ghcr.io/cole-brokamp/datahub-r@sha256:REPLACE_AT_RELEASE

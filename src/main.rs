@@ -545,8 +545,8 @@ mod tests {
     #[test]
     fn strips_docker_transport_for_oci_runtimes() {
         assert_eq!(
-            oci_reference("docker://ghcr.io/cchmc/datahub-r@sha256:abc").unwrap(),
-            "ghcr.io/cchmc/datahub-r@sha256:abc"
+            oci_reference("docker://ghcr.io/cole-brokamp/datahub-r@sha256:abc").unwrap(),
+            "ghcr.io/cole-brokamp/datahub-r@sha256:abc"
         );
     }
 

@@ -56,7 +56,7 @@ rg -Fq 'cargo:rustc-env=DATAHUB_R_VERSION' build.rs
 rg -Fq -- '--cleanenv' src/main.rs
 rg -Fq -- '--db PROFILE' src/main.rs
 rg -Fq 'APPTAINERENV_' src/main.rs
-rg -q '^docker://ghcr[.]io/cchmc/datahub-r@sha256:' RELEASE_IMAGE
+rg -q '^docker://ghcr[.]io/cole-brokamp/datahub-r@sha256:' RELEASE_IMAGE
 rg -q 'linux/amd64' .github/workflows/release.yml
 rg -q 'linux/arm64' .github/workflows/release.yml
 rg -Fq 'pattern: datahub-r-*' .github/workflows/release.yml

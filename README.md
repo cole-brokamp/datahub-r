@@ -4,9 +4,9 @@
 It combines a multi-architecture OCI image with a small standalone Rust command that runs the same environment on a laptop, workstation, or cluster.
 The repository name describes the shared DataHub environment, while database profiles keep it from being tied to only the MBHI database.
 
-The project is currently local-only and has no Git remote or published release.
-The installation commands that download from GitHub will work after the repository and first release exist.
-Until then, build the CLI from this checkout and set `DATAHUB_R_IMAGE` to a local image or SIF.
+The project is currently a private preview at `cole-brokamp/datahub-r`.
+The first release is `2026.09.0`, with native CLI archives and a digest-pinned Linux ARM64/AMD64 image published through GitHub.
+Repository, release, and container-registry access require authorization while the preview remains private.
 
 ## What is portable
 
@@ -28,35 +28,48 @@ Every accepted rebuild receives a new `datahub-r` version even when the R versio
 
 ## Installation
 
-### Homebrew
+### Private preview release
 
-After the first release and tap setup, macOS and Linux users can install or upgrade with:
+Use an authenticated GitHub CLI to download the archive for the host platform.
+For an x86_64 Linux workstation or cluster:
 
 ```sh
-brew install cchmc/tap/datahub-r
-brew upgrade datahub-r
+mkdir datahub-r-2026.09.0
+cd datahub-r-2026.09.0
+gh release download v2026.09.0 \
+  --repo cole-brokamp/datahub-r \
+  --pattern datahub-r-x86_64-unknown-linux-musl.tar.gz \
+  --pattern SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
+tar -xzf datahub-r-x86_64-unknown-linux-musl.tar.gz
+install -m 0755 datahub-r "$HOME/.local/bin/datahub-r"
 ```
 
-Homebrew downloads the native executable for the host architecture.
-It does not install a container runtime automatically.
+The other release targets are `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, and `x86_64-apple-darwin`.
+The native executable does not require Rust, R, or a package manager, but it does require one supported container runtime.
 
 ### Direct installer
 
-After the first release, install the latest native executable with:
+The direct installer is ready for use after the repository and its release assets become publicly readable:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/cchmc/datahub-r/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/cole-brokamp/datahub-r/main/install.sh | sh
 ```
 
 The installer downloads the matching release archive, verifies its SHA-256 checksum, and places `datahub-r` in `${DATAHUB_R_INSTALL_DIR:-$HOME/.local/bin}`.
 Use a particular immutable version with `--version`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/cchmc/datahub-r/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/cole-brokamp/datahub-r/main/install.sh \
   | sh -s -- --version 2026.09.0
 ```
 
 Ensure `$HOME/.local/bin` is on `PATH` when using the default location.
+
+### Homebrew
+
+A Homebrew formula is generated with each release, but no tap is configured for the private preview.
+After a tap is available, Homebrew will select the native executable for the host architecture and will not install a container runtime automatically.
 
 ### From a source checkout
 
@@ -95,6 +108,16 @@ datahub-r doctor
 
 The command loads the `apptainer/1.4.2` environment module when Apptainer is not already on `PATH` and the module command is available.
 It never loads cluster R or MSSQL modules.
+
+The preview image is private, so Apptainer must authenticate to GHCR before the first pull:
+
+```sh
+apptainer registry login --username GITHUB_USERNAME docker://ghcr.io
+datahub-r pull
+```
+
+Enter a GitHub personal access token with `read:packages` permission when prompted.
+GitHub SSH authentication covers repository pushes and clones but does not authenticate GHCR pulls.
 
 ## Commands
 
@@ -329,8 +352,8 @@ A release uses these identifiers:
 ```text
 VERSION:         2026.09.0
 Git tag:         v2026.09.0
-OCI tag:         ghcr.io/cchmc/datahub-r:2026.09.0
-Embedded image:  docker://ghcr.io/cchmc/datahub-r@sha256:<manifest-digest>
+OCI tag:         ghcr.io/cole-brokamp/datahub-r:2026.09.0
+Embedded image:  docker://ghcr.io/cole-brokamp/datahub-r@sha256:7d75e64f1fdac93c809e804e21b6fef8540fe005fbc65336bb6ee8b7e7323b85
 ```
 
 The Git and OCI tags are human-readable immutable release names.
@@ -344,7 +367,7 @@ If a change makes existing compiled user packages unsafe to reuse, advance the s
 
 To make a release, remove `-dev` from `VERSION`, commit that value, and push the matching `vYYYY.MM.REVISION` tag after review.
 The release workflow then builds and pushes the Linux ARM64 and AMD64 image under one OCI tag, captures its manifest digest, compiles four native CLI archives with that digest embedded, writes checksums, creates the GitHub release, and generates a Homebrew formula.
-If `HOMEBREW_TAP_TOKEN` is configured, the final job updates `cchmc/homebrew-tap`; otherwise it reports that the tap update was skipped.
+If `HOMEBREW_TAP_TOKEN` is configured, the final job updates `cole-brokamp/homebrew-tap`; otherwise it reports that the tap update was skipped.
 
 For the next development cycle, change `VERSION` to the next intended calendar version with `-dev`.
 Do not reuse or move an existing Git or OCI release tag.
@@ -393,8 +416,9 @@ When an approved SIF is available there, acceptance consists of:
 5. Install and reload a harmless PPM package in the persistent library.
 6. Confirm that neither the R nor MSSQL cluster module was loaded.
 
-## Publication boundary
+## Release status
 
-This checkout has no Git remote, and no release or package has been published.
-The workflows and packaging files are prepared for a future `cchmc/datahub-r` repository.
-Do not create that remote, push, tag, publish to GHCR, update the Homebrew tap, copy an artifact to the cluster, or integrate with `mbhi_dh_geomarker` without explicit approval for that live action.
+The private repository is `git@github.com:cole-brokamp/datahub-r.git`.
+Release `v2026.09.0` is the first private preview and its multi-architecture image is pinned to the manifest digest shown above.
+The Homebrew tap and any public distribution remain unconfigured.
+Cluster acceptance and live database checks remain separate from the automated build and require credentials available only in the target environment.
