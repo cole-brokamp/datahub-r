@@ -1,0 +1,16 @@
+[package]
+name = "datahub-r"
+# The public zero-padded CalVer is read from VERSION because it is not SemVer.
+version = "0.0.0"
+edition = "2024"
+publish = false
+build = "build.rs"
+description = "Portable launcher for the CCHMC datahub-r environment"
+
+[dependencies]
+
+[profile.release]
+codegen-units = 1
+lto = true
+panic = "abort"
+strip = true

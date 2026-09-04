@@ -1,0 +1,7 @@
+.DS_Store
+.env
+.Renviron
+*.sif
+build/
+dist/
+target/

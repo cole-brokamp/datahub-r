@@ -1,0 +1,205 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      build_date: ${{ steps.release.outputs.build_date }}
+      lock_sha: ${{ steps.release.outputs.lock_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: release
+        name: Validate immutable release identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          [[ "$version" =~ ^[0-9]{4}[.](0[1-9]|1[0-2])[.](0|[1-9][0-9]*)$ ]]
+          [[ "$GITHUB_REF_NAME" == "v$version" ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(git show -s --format=%cI "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+          echo "lock_sha=$(sha256sum pkg.lock | awk '{ print $1 }')" >> "$GITHUB_OUTPUT"
+
+  image:
+    needs: validate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.resolved.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: existing
+        name: Preserve an existing immutable version tag
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          if inspection="$(docker buildx imagetools inspect "$IMAGE" 2>/dev/null)"; then
+            digest="$(awk '$1 == "Digest:" { print $2; exit }' <<< "$inspection")"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+            echo "Reusing immutable $IMAGE@$digest"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+      - id: build
+        if: steps.existing.outputs.found != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.version }}
+          build-args: |
+            DATAHUB_R_VERSION=${{ needs.validate.outputs.version }}
+            BUILD_DATE=${{ needs.validate.outputs.build_date }}
+            VCS_REF=${{ github.sha }}
+            PACKAGE_LOCK_SHA256=${{ needs.validate.outputs.lock_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - id: resolved
+        name: Resolve release image digest
+        env:
+          EXISTING_DIGEST: ${{ steps.existing.outputs.digest }}
+          BUILT_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          digest="${EXISTING_DIGEST:-$BUILT_DIGEST}"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+  cli:
+    needs: [validate, image]
+    name: CLI ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    env:
+      DATAHUB_R_RELEASE_IMAGE: docker://ghcr.io/${{ github.repository }}@${{ needs.image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux linker
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+      - name: Install Rust target
+        run: rustup target add "${{ matrix.target }}"
+      - name: Build release executable
+        run: cargo build --locked --release --target "${{ matrix.target }}"
+      - name: Verify embedded release
+        shell: bash
+        run: |
+          output="$(target/${{ matrix.target }}/release/datahub-r version)"
+          grep -F "datahub-r ${{ needs.validate.outputs.version }}" <<< "$output"
+          grep -F "release image: $DATAHUB_R_RELEASE_IMAGE" <<< "$output"
+      - name: Package release executable
+        run: scripts/package-release.sh "target/${{ matrix.target }}/release/datahub-r" "${{ matrix.target }}" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: datahub-r-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: [validate, cli]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create checksums and Homebrew formula
+        run: |
+          set -euo pipefail
+          find dist -maxdepth 1 -name '*.tar.gz' -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            | sed 's#  dist/#  #' > dist/SHA256SUMS
+          scripts/render-homebrew-formula.sh dist dist/datahub-r.rb
+          cp install.sh dist/install.sh
+      - name: Publish immutable GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --generate-notes \
+            --title "datahub-r ${{ needs.validate.outputs.version }}"
+
+  homebrew:
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - name: Explain an unconfigured tap
+        if: env.TAP_TOKEN == ''
+        run: echo "HOMEBREW_TAP_TOKEN is not configured; skipping tap update."
+      - uses: actions/checkout@v4
+        if: env.TAP_TOKEN != ''
+        with:
+          repository: cchmc/homebrew-tap
+          token: ${{ env.TAP_TOKEN }}
+          path: tap
+      - name: Download generated formula
+        if: env.TAP_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p formula
+          gh release download "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern datahub-r.rb \
+            --dir formula
+      - name: Update tap
+        if: env.TAP_TOKEN != ''
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          install -D -m 0644 ../formula/datahub-r.rb Formula/datahub-r.rb
+          git add Formula/datahub-r.rb
+          if git diff --cached --quiet; then
+            echo "Homebrew formula is already current."
+          else
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git commit -m "datahub-r $GITHUB_REF_NAME"
+            git push
+          fi

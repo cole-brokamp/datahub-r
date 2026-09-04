@@ -1,0 +1,46 @@
+local({
+  ppm_repo <- "https://packagemanager.posit.co/cran/__linux__/noble/latest"
+
+  options(
+    repos = c(CRAN = ppm_repo),
+    HTTPUserAgent = sprintf(
+      "R/%s R (%s)",
+      getRversion(),
+      paste(
+        getRversion(),
+        R.version[["platform"]],
+        R.version[["arch"]],
+        R.version[["os"]]
+      )
+    )
+  )
+
+  r_minor <- strsplit(R.version[["minor"]], ".", fixed = TRUE)[[1L]][1L]
+  r_major_minor <- paste(R.version[["major"]], r_minor, sep = ".")
+  user_library <- file.path(
+    path.expand("~"),
+    ".local",
+    "share",
+    "datahub-r",
+    "v1",
+    paste0("R-", r_major_minor),
+    "library"
+  )
+
+  if (!dir.exists(user_library)) {
+    dir.create(user_library, recursive = TRUE, showWarnings = FALSE)
+  }
+
+  if (!dir.exists(user_library)) {
+    stop("datahub-r could not create its user library: ", user_library)
+  }
+
+  if (file.access(user_library, mode = 2L) != 0L) {
+    stop("datahub-r user library is not writable: ", user_library)
+  }
+
+  Sys.setenv(R_LIBS_USER = user_library)
+  .libPaths(unique(c(user_library, .libPaths())))
+})
+
+sys.source("/opt/datahub-r/database.R", envir = globalenv())

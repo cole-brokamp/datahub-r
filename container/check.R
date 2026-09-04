@@ -1,0 +1,80 @@
+#!/usr/bin/env Rscript
+
+source("/opt/datahub-r/database.R", local = TRUE)
+
+datahub_r_check <- function(profile = Sys.getenv(
+  "DATAHUB_R_DB_PROFILE",
+  unset = "MBHI"
+)) {
+  required_packages <- c(
+    "needenv",
+    "DBI",
+    "odbc",
+    "dplyr",
+    "dbplyr",
+    "nanoparquet",
+    "bit64",
+    "pak",
+    "renv"
+  )
+
+  unavailable <- required_packages[
+    !vapply(required_packages, requireNamespace, logical(1L), quietly = TRUE)
+  ]
+
+  if (length(unavailable) > 0L) {
+    stop("required package(s) unavailable: ", paste(unavailable, collapse = ", "))
+  }
+
+  expected_ppm <- "https://packagemanager.posit.co/cran/__linux__/noble/latest"
+  active_cran <- unname(getOption("repos")[["CRAN"]])
+
+  if (!identical(active_cran, expected_ppm)) {
+    warning(
+      "the active CRAN repository is not the supported Posit Package Manager repository",
+      call. = FALSE
+    )
+  }
+
+  drivers <- odbc::odbcListDrivers()
+  driver_names <- if (ncol(drivers) > 0L) {
+    as.character(drivers[[1L]])
+  } else {
+    character()
+  }
+
+  if (!"ODBC Driver 18 for SQL Server" %in% driver_names) {
+    stop("ODBC Driver 18 for SQL Server is not registered")
+  }
+
+  profile <- datahub_r_database_profile(profile)
+  config <- datahub_r_database_config(profile)
+
+  message("required ", profile, " environment variables are available")
+
+  con <- datahub_r_database_connect(config = config)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  probe <- DBI::dbGetQuery(con, "SELECT 1 AS ok")
+
+  if (
+    nrow(probe) != 1L ||
+      ncol(probe) != 1L ||
+      is.na(probe[[1L]][1L]) ||
+      as.integer(probe[[1L]][1L]) != 1L
+  ) {
+    stop(profile, " connection probe returned an unexpected result")
+  }
+
+  message("R ", as.character(getRversion()))
+  message("user library: ", .libPaths()[[1L]])
+  message("CRAN repository: ", active_cran)
+  message("ODBC Driver 18 for SQL Server is registered")
+  message(profile, " connection probe succeeded")
+
+  invisible(TRUE)
+}
+
+if (sys.nframe() == 0L) {
+  datahub_r_check()
+}

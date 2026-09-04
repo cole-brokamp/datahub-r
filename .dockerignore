@@ -1,0 +1,7 @@
+.git
+.DS_Store
+.Renviron
+*.sif
+build
+dist
+target
