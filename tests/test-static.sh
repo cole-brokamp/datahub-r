@@ -59,6 +59,7 @@ rg -Fq 'APPTAINERENV_' src/main.rs
 rg -q '^docker://ghcr[.]io/cchmc/datahub-r@sha256:' RELEASE_IMAGE
 rg -q 'linux/amd64' .github/workflows/release.yml
 rg -q 'linux/arm64' .github/workflows/release.yml
+rg -Fq 'pattern: datahub-r-*' .github/workflows/release.yml
 
 if [[ -e bin/datahub-r ]]; then
   echo "the obsolete Bash launcher still exists" >&2
