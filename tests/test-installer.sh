@@ -23,7 +23,11 @@ test_root="$(mktemp -d)"
 trap 'rm -rf -- "$test_root"' EXIT HUP INT TERM
 release_dir="$test_root/release"
 install_dir="$test_root/bin"
+pull_install_dir="$test_root/pull-bin"
+fake_bin="$test_root/fake-bin"
+pull_log="$test_root/pull.log"
 mkdir -p "$release_dir"
+mkdir -p "$fake_bin"
 
 "$repo_dir/scripts/package-release.sh" "$binary" "$target" "$release_dir"
 archive="datahub-r-$target.tar.gz"
@@ -39,4 +43,23 @@ DATAHUB_R_RELEASE_BASE_URL="file://$release_dir" \
 
 [[ -x "$install_dir/datahub-r" ]]
 "$install_dir/datahub-r" version | rg -Fq "datahub-r $(tr -d '\r\n' < "$repo_dir/VERSION")"
+
+cat > "$fake_bin/container" <<'FAKE_CONTAINER'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "image" && "${2:-}" == "pull" ]]; then
+  printf 'container-pull\n' > "$DATAHUB_TEST_PULL_LOG"
+fi
+FAKE_CONTAINER
+chmod +x "$fake_bin/container"
+
+PATH="$fake_bin:$PATH" \
+  DATAHUB_TEST_PULL_LOG="$pull_log" \
+  DATAHUB_R_IMAGE="docker://example.invalid/datahub-r:test" \
+  DATAHUB_R_RUNTIME="container" \
+  DATAHUB_R_RELEASE_BASE_URL="file://$release_dir" \
+  sh "$repo_dir/install.sh" --install-dir "$pull_install_dir" --pull >/dev/null
+
+[[ -x "$pull_install_dir/datahub-r" ]]
+rg -Fxq 'container-pull' "$pull_log"
 echo "installer checks passed"

@@ -35,6 +35,14 @@ curl -fsSL https://raw.githubusercontent.com/cole-brokamp/datahub-r/main/install
 ```
 
 The installer downloads the matching release archive, verifies its SHA-256 checksum, and places `datahub-r` in `${DATAHUB_R_INSTALL_DIR:-$HOME/.local/bin}`.
+When run from a terminal, it offers to pull the linked container image immediately after installing the executable.
+Use `--pull` to do this without a prompt or `--no-pull` to skip the offer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cole-brokamp/datahub-r/main/install.sh \
+  | sh -s -- --pull
+```
+
 Use a particular immutable version with `--version`:
 
 ```sh
@@ -321,7 +329,7 @@ The cache has separate final-image, Apptainer cache, temporary-conversion, parti
 The image reference and architecture are part of the cached filename identity.
 A per-reference lock serializes concurrent first runs, and the winning pull atomically moves its completed SIF into place.
 Credentials and project data are never stored in the image cache.
-On an interactive cache miss, `datahub-r` prints one status line while Apptainer runs in silent mode; conversion errors are still reported.
+On an interactive cache miss, `datahub-r` displays a spinner while Apptainer runs in silent mode; conversion errors are still reported.
 
 OCI runtimes use their own native image stores instead of this SIF cache.
 Use `datahub-r pull` to prepare the configured image without starting R.

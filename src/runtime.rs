@@ -1,8 +1,11 @@
 use crate::cli::RuntimeRequest;
 use std::env;
 use std::fmt;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::thread;
+use std::time::Duration;
 
 pub const APPTAINER_MODULE: &str = "apptainer/1.4.2";
 
@@ -139,6 +142,56 @@ pub fn run(
     arguments: &[std::ffi::OsString],
     environment: &[(String, std::ffi::OsString)],
 ) -> Result<ExitStatus, String> {
+    configured_command(runtime, arguments, environment)
+        .status()
+        .map_err(|error| format!("could not run {runtime}: {error}"))
+}
+
+pub fn run_with_spinner(
+    runtime: RuntimeKind,
+    arguments: &[std::ffi::OsString],
+    environment: &[(String, std::ffi::OsString)],
+    message: &str,
+) -> Result<ExitStatus, String> {
+    let mut child = configured_command(runtime, arguments, environment)
+        .spawn()
+        .map_err(|error| format!("could not run {runtime}: {error}"))?;
+
+    if !std::io::stderr().is_terminal() {
+        return wait_for_child(&mut child, runtime);
+    }
+
+    let frames = ['|', '/', '-', '\\'];
+    let mut frame = 0;
+    let mut stderr = std::io::stderr().lock();
+    loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| format!("could not wait for {runtime}: {error}"))?
+        {
+            let result = if status.success() { "done" } else { "failed" };
+            let _ = writeln!(stderr, "\r{message} {result}");
+            return Ok(status);
+        }
+
+        let _ = write!(stderr, "\r{message} {}", frames[frame]);
+        let _ = stderr.flush();
+        frame = (frame + 1) % frames.len();
+        thread::sleep(Duration::from_millis(120));
+    }
+}
+
+fn wait_for_child(child: &mut Child, runtime: RuntimeKind) -> Result<ExitStatus, String> {
+    child
+        .wait()
+        .map_err(|error| format!("could not wait for {runtime}: {error}"))
+}
+
+fn configured_command(
+    runtime: RuntimeKind,
+    arguments: &[std::ffi::OsString],
+    environment: &[(String, std::ffi::OsString)],
+) -> Command {
     let mut command = if runtime == RuntimeKind::Apptainer
         && !command_available(RuntimeKind::Apptainer.executable())
     {
@@ -166,8 +219,6 @@ pub fn run(
         command.env(name, value);
     }
     command
-        .status()
-        .map_err(|error| format!("could not run {runtime}: {error}"))
 }
 
 pub fn host_ids() -> Option<(String, String)> {

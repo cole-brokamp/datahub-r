@@ -305,12 +305,6 @@ fn prepare_apptainer_image(image: &str) -> Result<PathBuf, String> {
         "datahub-r-{VERSION}-{architecture}-{key}.partial.{}.sif",
         std::process::id()
     ));
-    if std::io::stderr().is_terminal() {
-        eprintln!(
-            "datahub-r: downloading and converting the image with Apptainer; the first pull may take several minutes"
-        );
-    }
-
     let arguments = vec![
         OsString::from("--silent"),
         OsString::from("pull"),
@@ -327,7 +321,12 @@ fn prepare_apptainer_image(image: &str) -> Result<PathBuf, String> {
             temporary_dir.as_os_str().to_owned(),
         ),
     ];
-    let status = runtime::run(RuntimeKind::Apptainer, &arguments, &environment)?;
+    let status = runtime::run_with_spinner(
+        RuntimeKind::Apptainer,
+        &arguments,
+        &environment,
+        "datahub-r: downloading and converting image",
+    )?;
     if let Err(error) = ensure_success(status, RuntimeKind::Apptainer, "pull") {
         let _ = fs::remove_file(&partial);
         return Err(error);

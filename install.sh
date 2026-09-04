@@ -5,12 +5,19 @@ set -eu
 repository="cole-brokamp/datahub-r"
 install_dir="${DATAHUB_R_INSTALL_DIR:-$HOME/.local/bin}"
 requested_version=""
+pull_mode="ask"
 
 usage() {
   printf '%s\n' \
     'Install a released datahub-r CLI binary.' \
     '' \
-    'Usage: install.sh [--version VERSION] [--install-dir DIRECTORY]' \
+    'Usage: install.sh [--version VERSION] [--install-dir DIRECTORY] [--pull|--no-pull]' \
+    '' \
+    'Options:' \
+    '  --version VERSION       Install a specific release.' \
+    '  --install-dir DIRECTORY Choose the executable destination.' \
+    '  --pull                  Pull the linked image after installation.' \
+    '  --no-pull               Do not offer to pull the linked image.' \
     '' \
     'Environment:' \
     '  DATAHUB_R_INSTALL_DIR       Default installation directory.' \
@@ -28,6 +35,14 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || { printf '%s\n' 'missing value after --install-dir' >&2; exit 2; }
       install_dir="$2"
       shift 2
+      ;;
+    --pull)
+      pull_mode="yes"
+      shift
+      ;;
+    --no-pull)
+      pull_mode="no"
+      shift
       ;;
     -h|--help)
       usage
@@ -107,3 +122,35 @@ install -m 0755 "$temporary_dir/datahub-r" "$install_dir/datahub-r"
 
 printf 'installed %s\n' "$install_dir/datahub-r"
 "$install_dir/datahub-r" version
+
+pull_image() {
+  "$install_dir/datahub-r" pull
+}
+
+print_pull_hint() {
+  printf 'run %s pull to download the container image before first use\n' "$install_dir/datahub-r"
+}
+
+case "$pull_mode" in
+  yes)
+    pull_image
+    ;;
+  no)
+    print_pull_hint
+    ;;
+  ask)
+    response=""
+    if [ -t 1 ] && [ -c /dev/tty ]; then
+      printf 'Pull the container image now? This can take several minutes. [y/N] ' > /dev/tty
+      if IFS= read -r response < /dev/tty; then
+        case "$response" in
+          y|Y|yes|Yes|YES)
+            pull_image
+            exit 0
+            ;;
+        esac
+      fi
+    fi
+    print_pull_hint
+    ;;
+esac
