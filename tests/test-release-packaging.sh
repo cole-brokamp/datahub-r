@@ -14,7 +14,8 @@ dist_dir="$test_root/dist"
 mkdir -p "$fixture_repo/scripts" "$fixture_repo/packaging/homebrew" "$dist_dir"
 cp "$repo_dir/scripts/render-homebrew-formula.sh" "$fixture_repo/scripts/"
 cp "$repo_dir/packaging/homebrew/datahub-r.rb.in" "$fixture_repo/packaging/homebrew/"
-sed 's/-dev$//' "$repo_dir/VERSION" > "$fixture_repo/VERSION"
+release_version="$(sed 's/-dev$//' "$repo_dir/VERSION")"
+printf '%s\n' "$release_version" > "$fixture_repo/VERSION"
 
 for target in \
   aarch64-apple-darwin \
@@ -36,7 +37,8 @@ for archive in "$dist_dir"/*.tar.gz; do
   tar -tzf "$archive" | rg -Fxq datahub-r
 done
 
-if "$repo_dir/scripts/render-homebrew-formula.sh" "$dist_dir" "$dist_dir/dev.rb" >/dev/null 2>&1; then
+printf '%s-dev\n' "$release_version" > "$fixture_repo/VERSION"
+if "$fixture_repo/scripts/render-homebrew-formula.sh" "$dist_dir" "$dist_dir/dev.rb" >/dev/null 2>&1; then
   echo "a Homebrew formula was unexpectedly rendered for a development version" >&2
   exit 1
 fi
