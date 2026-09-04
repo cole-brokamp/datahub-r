@@ -4,9 +4,7 @@
 It combines a multi-architecture OCI image with a small standalone Rust command that runs the same environment on a laptop, workstation, or cluster.
 The repository name describes the shared DataHub environment, while database profiles keep it from being tied to only the MBHI database.
 
-The project is currently a private preview at `cole-brokamp/datahub-r`.
 The first release is `2026.09.0`, with native CLI archives and a digest-pinned Linux ARM64/AMD64 image published through GitHub.
-Repository, release, and container-registry access require authorization while the preview remains private.
 
 ## What is portable
 
@@ -28,29 +26,9 @@ Every accepted rebuild receives a new `datahub-r` version even when the R versio
 
 ## Installation
 
-### Private preview release
-
-Use an authenticated GitHub CLI to download the archive for the host platform.
-For an x86_64 Linux workstation or cluster:
-
-```sh
-mkdir datahub-r-2026.09.0
-cd datahub-r-2026.09.0
-gh release download v2026.09.0 \
-  --repo cole-brokamp/datahub-r \
-  --pattern datahub-r-x86_64-unknown-linux-musl.tar.gz \
-  --pattern SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf datahub-r-x86_64-unknown-linux-musl.tar.gz
-install -m 0755 datahub-r "$HOME/.local/bin/datahub-r"
-```
-
-The other release targets are `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, and `x86_64-apple-darwin`.
-The native executable does not require Rust, R, or a package manager, but it does require one supported container runtime.
-
 ### Direct installer
 
-The direct installer is ready for use after the repository and its release assets become publicly readable:
+The installer downloads the correct native executable for macOS or Linux:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/cole-brokamp/datahub-r/main/install.sh | sh
@@ -65,10 +43,27 @@ curl -fsSL https://raw.githubusercontent.com/cole-brokamp/datahub-r/main/install
 ```
 
 Ensure `$HOME/.local/bin` is on `PATH` when using the default location.
+The native executable does not require Rust, R, or a package manager, but it does require one supported container runtime.
+
+### Manual release download
+
+Every [GitHub release](https://github.com/cole-brokamp/datahub-r/releases) includes archives for Linux and macOS on both AMD64 and ARM64, along with a `SHA256SUMS` file.
+For an x86_64 Linux workstation or cluster:
+
+```sh
+version=2026.09.0
+curl -fLO "https://github.com/cole-brokamp/datahub-r/releases/download/v${version}/datahub-r-x86_64-unknown-linux-musl.tar.gz"
+curl -fLO "https://github.com/cole-brokamp/datahub-r/releases/download/v${version}/SHA256SUMS"
+sha256sum --check --ignore-missing SHA256SUMS
+tar -xzf datahub-r-x86_64-unknown-linux-musl.tar.gz
+install -m 0755 datahub-r "$HOME/.local/bin/datahub-r"
+```
+
+The other release targets are `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, and `x86_64-apple-darwin`.
 
 ### Homebrew
 
-A Homebrew formula is generated with each release, but no tap is configured for the private preview.
+A Homebrew formula is attached to each release, but a tap is not yet configured.
 After a tap is available, Homebrew will select the native executable for the host architecture and will not install a container runtime automatically.
 
 ### From a source checkout
@@ -109,15 +104,8 @@ datahub-r doctor
 The command loads the `apptainer/1.4.2` environment module when Apptainer is not already on `PATH` and the module command is available.
 It never loads cluster R or MSSQL modules.
 
-The preview image is private, so Apptainer must authenticate to GHCR before the first pull:
-
-```sh
-apptainer registry login --username GITHUB_USERNAME docker://ghcr.io
-datahub-r pull
-```
-
-Enter a GitHub personal access token with `read:packages` permission when prompted.
-GitHub SSH authentication covers repository pushes and clones but does not authenticate GHCR pulls.
+The published image can be prepared before a job starts with `datahub-r pull`.
+Public GHCR pulls do not require registry authentication.
 
 ## Commands
 
@@ -418,7 +406,7 @@ When an approved SIF is available there, acceptance consists of:
 
 ## Release status
 
-The private repository is `git@github.com:cole-brokamp/datahub-r.git`.
-Release `v2026.09.0` is the first private preview and its multi-architecture image is pinned to the manifest digest shown above.
-The Homebrew tap and any public distribution remain unconfigured.
+The public repository is [cole-brokamp/datahub-r](https://github.com/cole-brokamp/datahub-r).
+Release `v2026.09.0` is the first published release, and its multi-architecture image is pinned to the manifest digest shown above.
+The Homebrew tap is not yet configured.
 Cluster acceptance and live database checks remain separate from the automated build and require credentials available only in the target environment.
